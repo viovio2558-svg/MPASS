@@ -4,6 +4,6 @@
   "compatibility_date": "2025-01-01",
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "d1_databases": [
-    { "binding": "DB", "database_name": "mpass-db", "database_id": "ใส่ID-ตรงนี้" }
+    { "binding": "DB", "database_name": "mpass-db", "database_id": "b626c5ec-d278-42e8-bfb2-2b85dbb21b09" }
   ]
 }
