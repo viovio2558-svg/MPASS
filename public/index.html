@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎟️MPASS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#e8ecf2;--ink:#0f1a2c;--mu:#5d6b82;--ac:#0b7a66;--bad:#b42318;--warn:#a15c07;--card:#fff;--bd:#d3dae6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans Thai",system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:18px 16px 48px}
+.brand{font-weight:700;font-size:1.5rem;margin:6px 0 16px}
+h2{font-size:1.05rem;margin:0 0 10px}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:.85rem;color:var(--mu);margin:10px 0 4px}
+input{width:100%;padding:11px;border:1px solid var(--bd);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+button{font:inherit;padding:11px 16px;border-radius:10px;border:1px solid var(--bd);background:#fff;color:var(--ink);cursor:pointer}
+button.p{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+button.d{color:var(--bad)}button:disabled{opacity:.45}
+button:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.mu{color:var(--mu);font-size:.88rem}.ok{color:var(--ac)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.ticket{background:var(--card);border-radius:14px;overflow:hidden;margin-bottom:14px}
+.ticket .top{padding:20px 18px 16px;text-align:center}
+.ticket .tear{border-top:2px dashed var(--bd);margin:0 18px;position:relative}
+.ticket .tear:before,.ticket .tear:after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--bg)}
+.ticket .tear:before{left:-28px}.ticket .tear:after{right:-28px}
+.ticket .bot{padding:16px 18px 22px;text-align:center}
+.st{display:inline-block;font-weight:700;border:2px solid currentColor;border-radius:99px;padding:2px 14px}
+.left{font-size:2rem;font-weight:700;line-height:1.2;margin:10px 0 2px}
+.code{font-family:ui-monospace,monospace;font-weight:600;letter-spacing:.1em}
+.qr{display:inline-block;background:#fff;padding:10px;border:1px solid var(--bd);border-radius:10px;margin-bottom:8px}
+.msg{border:2px solid currentColor;border-radius:12px;padding:12px;margin:12px 0;font-weight:700;text-align:center}
+.item{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid var(--bd);cursor:pointer}
+.item:first-child{border-top:0}
+a{color:var(--ac)}
+</style>
+</head>
+<body>
+<main>
+<div class="brand">🎟️MPASS</div>
+<div id="app"><p class="mu">กำลังโหลด…</p></div>
+</main>
+<script>
+const $ = s => document.querySelector(s), app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TZ = 'Asia/Bangkok';
+const fmt = t => t ? new Date(t).toLocaleString('th-TH', {timeZone: TZ, dateStyle: 'medium', timeStyle: 'short'}) : 'ไม่มีวันหมดอายุ';
+const pw = () => localStorage.getItem('mpass_pw') || '';
+let role = null, ask = !new URLSearchParams(location.search).get('n');
+
+async function api(path, body) {
+  const r = await fetch('/api/' + path, {
+    method: body ? 'POST' : 'GET',
+    headers: {'content-type': 'application/json', 'x-pass': pw()},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(d.error || 'เกิดข้อผิดพลาด'), {status: r.status});
+  return d;
+}
+const codeParam = () => (new URLSearchParams(location.search).get('c') || '').trim().toUpperCase();
+const go = (c, n) => { location.href = c ? '/?c=' + encodeURIComponent(c) + (n ? '&n=1' : '') : '/'; };
+const link = c => location.origin + '/?c=' + c;
+function qr(el, text) { el.innerHTML = ''; new QRCode(el, {text, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M}); }
+
+async function init() {
+  if (pw()) { try { role = (await api('me')).role; } catch (e) { role = null; } }
+  codeParam() ? voucherView(codeParam()) : home();
+}
+
+function loginBox(note) {
+  return `<div class="box"><h2>สำหรับพนักงาน</h2>
+    <label>รหัสผ่าน</label><input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:10px"><button class="p" id="login" style="width:100%">เข้าสู่ระบบ</button></div>
+    <div id="lmsg" class="bad">${note || ''}</div></div>`;
+}
+function bindLogin() {
+  const b = $('#login'); if (!b) return;
+  b.onclick = async () => {
+    localStorage.setItem('mpass_pw', $('#pw').value);
+    try { role = (await api('me')).role; } catch (e) { role = null; }
+    if (!role) { localStorage.removeItem('mpass_pw'); $('#lmsg').textContent = 'รหัสผ่านไม่ถูกต้อง'; return; }
+    init();
+  };
+}
+
+async function voucherView(code) {
+  let i;
+  try { i = await api('voucher/' + code); }
+  catch (e) { app.innerHTML = `<div class="box"><h2>ไม่พบ Mpass</h2><p class="mu">${esc(e.message)}</p></div>` + (role ? '<button id="home">← หน้าหลัก</button>' : ''); const h = $('#home'); if (h) h.onclick = () => go(); return; }
+  const st = i.state, daily = i.maxTotal == null, mx = daily ? i.maxPerDay : i.maxTotal;
+  const rem = Math.max(0, daily ? i.maxPerDay - i.usedToday : i.maxTotal - i.usedTotal);
+  const scope = daily ? 'สิทธิ์ที่เหลือวันนี้' : 'สิทธิ์ที่เหลือ';
+  const left = `${scope} ${rem} / ${mx} ครั้ง`;
+  const cls = st.ok ? 'ok' : (st.text.startsWith('ใช้ครบ') ? 'warn' : 'bad');
+  app.innerHTML = `<div class="ticket"><div class="top">
+      ${i.holder ? `<div class="mu">สำหรับ ${esc(i.holder)}</div>` : ''}
+      <h2 style="font-size:1.3rem;margin:4px 0 10px">${esc(i.title)}</h2>
+      <span class="st ${cls}">${esc(st.text)}</span>
+      <div class="mu" style="margin-top:12px">${scope}</div>
+      <div class="left">${rem} / ${mx} ครั้ง</div>
+      <div class="mu">${daily ? `ใช้ได้วันละ ${mx} ครั้ง (นับใหม่ทุกเที่ยงคืน)` : `ใช้ไปแล้ว ${i.usedTotal} ครั้ง`}${i.lastUsedAt ? ' · ใช้ล่าสุด ' + esc(fmt(i.lastUsedAt)) : ''}</div>
+      <div class="mu">หมดอายุ: ${esc(fmt(i.expiresAt))}</div></div>
+    <div class="tear"></div>
+    <div class="bot"><div class="qr"><div id="qr"></div></div><div class="code">${esc(i.code)}</div></div></div>
+    <div id="res"></div>
+    ${role ? `<div id="act"></div>` : `<div class="mu" style="text-align:center">แสดงหน้านี้ให้พนักงานสแกน</div>`}
+    ${role && i.history && i.history.length ? `<div class="box"><h2>ประวัติการใช้ล่าสุด</h2>${i.history.map(t => `<div class="mu">${esc(fmt(t))}</div>`).join('')}</div>` : ''}
+    ${role ? `<div class="row"><button id="home">← หน้าหลัก</button>${role === 'admin' ? `<button class="d" id="rev">${i.revoked ? 'คืนสถานะ Mpass' : 'ยกเลิก Mpass'}</button><button id="pic">💾 บันทึกรูป</button>` : ''}</div>` : `<details style="margin-top:14px"><summary class="mu">สำหรับพนักงาน</summary>${loginBox()}</details>`}`;
+  qr($('#qr'), link(i.code));
+  bindLogin();
+  if (!role) return;
+  $('#home').onclick = () => go();
+  const act = $('#act');
+  const doRedeem = async () => {
+    try { await api('redeem', {code: i.code}); ask = false; await voucherView(code); $('#res').innerHTML = '<div class="msg ok">ใช้ Mpass สำเร็จ ✓</div>'; }
+    catch (e) { $('#res').innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+  };
+  if (st.ok && ask) {
+    act.innerHTML = `<div class="msg warn">สแกนแล้ว ยืนยันใช้ Mpass นี้ใช่ไหม?
+      <div class="row" style="margin-top:10px"><button class="p" id="cy">✓ ยืนยัน หัก 1 ครั้ง</button><button id="cn">ยกเลิก</button></div></div>`;
+    $('#cy').onclick = () => { $('#cy').disabled = true; $('#cn').disabled = true; doRedeem(); };
+    $('#cn').onclick = () => { ask = false; voucherView(code); };
+  } else if (st.ok) {
+    act.innerHTML = '<button class="p" id="use" style="width:100%;padding:14px">ยืนยันการใช้ Mpass (หัก 1 ครั้ง)</button>';
+    $('#use').onclick = () => { $('#use').disabled = true; doRedeem(); };
+  }
+  const rv = $('#rev'); if (rv) rv.onclick = async () => { await api('revoke', {code: i.code, revoked: !i.revoked}); voucherView(code); };
+  const pic = $('#pic'); if (pic) pic.onclick = () => {
+    const q = $('#qr canvas'); if (!q) return;
+    const c = document.createElement('canvas'); c.width = 600; c.height = 820; const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, 600, 820); x.fillStyle = '#0f1a2c'; x.textAlign = 'center';
+    x.font = 'bold 40px sans-serif'; x.fillText('🎟️ ' + i.title, 300, 80, 540);
+    if (i.holder) { x.font = '28px sans-serif'; x.fillText('สำหรับ ' + i.holder, 300, 125, 540); }
+    x.drawImage(q, 100, 170, 400, 400);
+    x.font = 'bold 34px monospace'; x.fillText(i.code, 300, 625);
+    x.font = '28px sans-serif'; x.fillText(left, 300, 685, 540); x.fillText('หมดอายุ: ' + fmt(i.expiresAt), 300, 730, 540);
+    x.font = '22px sans-serif'; x.fillStyle = '#5d6b82'; x.fillText('แสดง QR นี้ให้พนักงานสแกน', 300, 785);
+    const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'mpass-' + i.code + '.png'; a.click();
+  };
+}
+
+async function home() {
+  if (!role) { app.innerHTML = `<div class="box">สแกน QR ของ Mpass เพื่อดูสิทธิ์ของคุณ</div>` + loginBox(); bindLogin(); return; }
+  let list = [];
+  if (role === 'admin') { try { list = await api('vouchers'); } catch (e) {} }
+  app.innerHTML = `<div class="box"><h2>ใช้ Mpass ด้วยรหัส</h2>
+      <div class="row"><input id="fc" placeholder="รหัส Mpass" style="flex:3"><button id="open" style="flex:1">เปิด</button></div></div>
+    ${role === 'admin' ? `<div class="box"><h2>สร้าง Mpass ใหม่</h2>
+      <label>ชื่อ Mpass</label><input id="ft" placeholder="เช่น บัตรกำนัลนวด 60 นาที">
+      <label>ผู้รับ (ไม่บังคับ)</label><input id="fh">
+      <div class="mu" style="margin-top:10px">กรอกอย่างใดอย่างหนึ่ง: ถ้ากรอก "ทั้งหมด" ไม่ต้องกรอก "ต่อวัน" · ถ้าเว้น "ทั้งหมด" ต้องกรอก "ต่อวัน" และ "หมดอายุ"</div>
+      <label>จำนวนครั้งที่ใช้ได้ทั้งหมด</label><input id="fa" type="number" min="1">
+      <label>จำนวนครั้งที่ใช้ได้ในแต่ละวัน</label><input id="fd" type="number" min="1">
+      <label>วัน-เวลาหมดอายุ (เวลาไทย)</label><input id="fe" type="datetime-local">
+      <div style="margin-top:12px"><button class="p" id="mk" style="width:100%">สร้าง Mpass</button></div><div id="mm" class="bad"></div></div>
+    <div class="box"><h2>รายการ Mpass (${list.length})</h2>${list.length ? list.map(v => `<div class="item" data-c="${esc(v.code)}"><div><b>${esc(v.title)}</b>${v.holder ? ' · ' + esc(v.holder) : ''}<div class="mu"><span class="code">${esc(v.code)}</span> · ใช้แล้ว ${v.used}${v.max_total ? '/' + v.max_total : ''} ครั้ง${v.max_per_day ? ' (สูงสุด ' + v.max_per_day + '/วัน)' : ''}</div></div><div class="${v.revoked ? 'bad' : ''}">${v.revoked ? 'ยกเลิก' : ''}</div></div>`).join('') : '<p class="mu">ยังไม่มี Mpass</p>'}</div>` : ''}
+    <button id="out">ออกจากระบบ</button>`;
+  $('#open').onclick = () => { const c = $('#fc').value.trim().toUpperCase(); if (c) go(c, true); };
+  $('#out').onclick = () => { localStorage.removeItem('mpass_pw'); location.reload(); };
+  document.querySelectorAll('.item').forEach(e => e.onclick = () => go(e.dataset.c, true));
+  const mk = $('#mk'); if (mk) mk.onclick = async () => {
+    const e = $('#fe').value;
+    try {
+      const r = await api('vouchers', {title: $('#ft').value, holder: $('#fh').value, maxTotal: $('#fa').value, maxPerDay: $('#fd').value,
+        expiresAt: e ? new Date(e + ':00+07:00').getTime() : null});
+      go(r.code, true);
+    } catch (er) { $('#mm').textContent = er.message; }
+  };
+}
+init();
+</script>
+</body>
+</html>
