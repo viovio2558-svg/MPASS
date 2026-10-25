@@ -148,6 +148,10 @@ async function home() {
   if (!role) { app.innerHTML = `<div class="box">สแกน QR ของ Mpass เพื่อดูสิทธิ์ของคุณ</div>` + loginBox(); bindLogin(); return; }
   let list = [];
   if (role === 'admin') { try { list = await api('vouchers'); } catch (e) {} }
+  const showAll = !!new URLSearchParams(location.search).get('all');
+  const isDone = v => v.revoked || (v.max_total && v.used >= v.max_total) || (v.expires_at && Date.now() > v.expires_at);
+  const full = list.filter(isDone);
+  if (!showAll) list = list.filter(v => !isDone(v));
   app.innerHTML = `<div class="box"><h2>ใช้ Mpass ด้วยรหัส</h2>
       <div class="row"><input id="fc" placeholder="รหัส Mpass" style="flex:3"><button id="open" style="flex:1">เปิด</button></div></div>
     ${role === 'admin' ? `<div class="box"><h2>สร้าง Mpass ใหม่</h2>
@@ -159,7 +163,7 @@ async function home() {
       <label>วัน-เวลาหมดอายุ (เวลาไทย)</label><input id="fe" type="datetime-local">
       <div style="margin-top:12px"><button class="p" id="mk" style="width:100%">สร้าง Mpass</button></div><div id="mm" class="bad"></div></div>
     <div class="box"><h2>รายการ Mpass (${list.length})</h2>${list.length ? list.map(v => `<div class="item" data-c="${esc(v.code)}"><div><b>${esc(v.title)}</b>${v.holder ? ' · ' + esc(v.holder) : ''}<div class="mu"><span class="code">${esc(v.code)}</span> · ใช้แล้ว ${v.used}${v.max_total ? '/' + v.max_total : ''} ครั้ง${v.max_per_day ? ' (สูงสุด ' + v.max_per_day + '/วัน)' : ''}</div></div><div class="${v.revoked ? 'bad' : ''}">${v.revoked ? 'ยกเลิก' : ''}</div></div>`).join('') : '<p class="mu">ยังไม่มี Mpass</p>'}</div>` : ''}
-    <button id="out">ออกจากระบบ</button>`;
+    ${full.length ? `<p><a href="${showAll ? '/' : '/?all=1'}">${showAll ? 'ซ่อน' : 'ดู'}รายการที่ใช้ครบ/หมดอายุ/ยกเลิก (${full.length})</a></p>` : ''}<button id="out">ออกจากระบบ</button>`;
   $('#open').onclick = () => { const c = $('#fc').value.trim().toUpperCase(); if (c) go(c, true); };
   $('#out').onclick = () => { localStorage.removeItem('mpass_pw'); location.reload(); };
   document.querySelectorAll('.item').forEach(e => e.onclick = () => go(e.dataset.c, true));
